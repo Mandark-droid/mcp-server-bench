@@ -193,7 +193,7 @@ async def run_mcp_benchmark(
         max_keepalive_connections=scenario.virtual_users + 5,
     )
 
-    async with httpx.AsyncClient(limits=limits) as client:
+    async with httpx.AsyncClient(limits=limits, follow_redirects=True) as client:
         # Verify MCP endpoint is reachable
         try:
             test_msg = _build_jsonrpc("initialize", {

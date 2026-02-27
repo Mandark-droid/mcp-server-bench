@@ -38,9 +38,8 @@ mcp-server-bench/
 │   └── metrics.py              # Metrics collection and aggregation
 │
 ├── analysis/                   # Result analysis
-│   ├── analyzer.py             # Statistical analysis and comparison
-│   ├── report_generator.py     # Markdown/HTML report generator
-│   └── plots.py                # Visualization (matplotlib/plotly)
+│   ├── analyzer.py             # Statistical analysis, comparison, and Markdown report generation
+│   └── plots.py                # Visualization charts (matplotlib)
 │
 ├── results/                    # Output directory (gitignored except samples)
 │   └── .gitkeep
@@ -71,12 +70,14 @@ The benchmark sweeps across these dimensions:
 | Dimension | Values |
 |-----------|--------|
 | **Server** | Gradio API, Gradio MCP, FastMCP API, FastMCP MCP |
-| **Concurrency (VUs)** | 1, 10, 25, 50, 100 |
+| **Protocol** | http_api, mcp_streamable |
+| **Concurrency (VUs)** | 1, 10, 25, 50 |
 | **Gradio concurrency_limit** | 1 (default), 5, 10, None |
+| **Gradio queue mode** | true (default), false |
 | **Tool** | echo, fibonacci, json_transform, async_sleep, payload_echo |
 | **Duration** | 60s per scenario (configurable) |
 
-Total scenarios: ~200 combinations (automated)
+Total scenarios: ~360 combinations (automated)
 
 ---
 
@@ -105,7 +106,7 @@ Total scenarios: ~200 combinations (automated)
 
 ```bash
 # Clone and install
-git clone https://github.com/kshitijthakkar/mcp-server-bench
+git clone https://github.com/Mandark-droid/mcp-server-bench
 cd mcp-server-bench
 pip install -e ".[dev]"
 
@@ -118,8 +119,14 @@ python run_benchmark.py --quick
 # Run specific comparison
 python run_benchmark.py --servers gradio,fastmcp --tools echo,fibonacci --vus 10,50
 
+# Control Gradio queue modes
+python run_benchmark.py --servers gradio --queue-modes true,false
+
 # Generate report from existing results
 python run_benchmark.py --analyze results/2026-02-27_run_001/
+
+# Run and push results to HuggingFace (report, charts, data)
+python run_benchmark.py --full --push-hf
 ```
 
 ---
@@ -127,10 +134,11 @@ python run_benchmark.py --analyze results/2026-02-27_run_001/
 ## Output
 
 The benchmark produces:
-1. **Raw JSON results** — per-request timings for full reproducibility
-2. **Summary CSV** — one row per scenario with aggregated metrics
-3. **Comparison report** (Markdown + HTML) — side-by-side analysis with charts
-4. **HuggingFace Dataset** — auto-push to `kshitijthakkar/mcp-server-bench`
+1. **Raw JSON results** (`detailed_results.json`) — per-request timings for full reproducibility
+2. **Summary CSV** (`summary.csv`) — one row per scenario with aggregated metrics
+3. **Comparison report** (`REPORT.md`) — side-by-side analysis with statistical comparisons
+4. **Charts** (`plots/`) — throughput comparison, latency comparison, concurrency scaling, protocol overhead
+5. **HuggingFace Dataset** — `--push-hf` uploads everything to [`kshitijthakkar/mcp-server-bench`](https://huggingface.co/datasets/kshitijthakkar/mcp-server-bench) with a full dataset card, embedded charts, and browsable data
 
 ---
 

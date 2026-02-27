@@ -84,7 +84,9 @@ class ServerProcess:
         )
         self.pid = self.process.pid
 
-    async def wait_ready(self, timeout: float = 30.0) -> bool:
+    async def wait_ready(
+        self, timeout: float = 30.0, protocol: Protocol = Protocol.HTTP_API,
+    ) -> bool:
         """Wait for the server to be ready to accept requests."""
         if self.server_type == ServerType.GRADIO:
             url = f"{cfg.GRADIO_API_BASE}/"
@@ -93,15 +95,50 @@ class ServerProcess:
 
         start = time.time()
         async with httpx.AsyncClient() as client:
+            # Phase 1: Wait for basic HTTP to be up
             while time.time() - start < timeout:
                 try:
                     resp = await client.get(url, timeout=2.0)
                     if resp.status_code < 500:
-                        return True
+                        break
                 except Exception:
                     pass
                 await asyncio.sleep(0.5)
-        return False
+            else:
+                return False
+
+            # Phase 2: For MCP protocols, also verify the MCP endpoint
+            if protocol in (Protocol.MCP_STREAMABLE, Protocol.MCP_SSE):
+                if self.server_type == ServerType.GRADIO:
+                    mcp_url = cfg.GRADIO_MCP_STREAMABLE
+                else:
+                    mcp_url = cfg.FASTMCP_MCP_STREAMABLE
+
+                init_msg = {
+                    "jsonrpc": "2.0",
+                    "method": "initialize",
+                    "id": "readiness-check",
+                    "params": {
+                        "protocolVersion": "2025-03-26",
+                        "capabilities": {},
+                        "clientInfo": {"name": "readiness-check", "version": "0.1.0"},
+                    },
+                }
+                headers = {"Content-Type": "application/json", "Accept": "application/json"}
+
+                while time.time() - start < timeout:
+                    try:
+                        resp = await client.post(
+                            mcp_url, json=init_msg, headers=headers, timeout=5.0,
+                        )
+                        if resp.status_code < 400:
+                            return True
+                    except Exception:
+                        pass
+                    await asyncio.sleep(0.5)
+                return False
+
+        return True
 
     def stop(self) -> None:
         """Stop the server subprocess gracefully."""
@@ -180,7 +217,7 @@ async def run_scenario(
 
     try:
         # 2. Wait for readiness
-        ready = await server.wait_ready(timeout=server_timeout)
+        ready = await server.wait_ready(timeout=server_timeout, protocol=scenario.protocol)
         if not ready:
             console.print("[red]  X Server failed to start[/]")
             return ScenarioResult(
