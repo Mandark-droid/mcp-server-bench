@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Gradio vs FastMCP Benchmark Suite — CLI Entry Point
+mcp-server-bench — CLI Entry Point
 
 Usage:
     python run_benchmark.py --full                   # Full sweep (~200 scenarios)
@@ -80,9 +80,9 @@ def main(
     full, quick, servers, tools, vus, cls, protocols,
     duration, analyze, output, push_hf,
 ):
-    """🔬 Gradio vs FastMCP Benchmark Suite"""
+    """🔬 mcp-server-bench — MCP Server Benchmark Suite"""
 
-    console.print("\n[bold magenta]🔬 Gradio vs FastMCP Benchmark Suite[/]\n")
+    console.print("\n[bold magenta]🔬 mcp-server-bench[/]\n")
 
     # --- Analyze existing results ---
     if analyze:

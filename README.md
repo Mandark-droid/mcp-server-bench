@@ -1,6 +1,6 @@
-# 🔬 Gradio vs FastMCP — API & MCP Server Benchmark Suite
+# 🔬 mcp-server-bench
 
-**A structured, reproducible benchmark comparing Gradio and FastMCP as API servers and MCP servers under identical workloads.**
+**A structured, reproducible benchmark comparing MCP server implementations (Gradio, FastMCP, and more) under identical workloads.**
 
 > Part of the [TraceMind](https://huggingface.co/kshitijthakkar) AI Observability Ecosystem
 
@@ -22,7 +22,7 @@ This suite provides apples-to-apples comparison by:
 ## Architecture
 
 ```
-gradio-mcp-benchmark/
+mcp-server-bench/
 │
 ├── servers/                    # Server implementations
 │   ├── shared_tools.py         # Shared tool logic (imported by both servers)
@@ -105,8 +105,8 @@ Total scenarios: ~200 combinations (automated)
 
 ```bash
 # Clone and install
-git clone https://github.com/kshitijthakkar/gradio-mcp-benchmark
-cd gradio-mcp-benchmark
+git clone https://github.com/kshitijthakkar/mcp-server-bench
+cd mcp-server-bench
 pip install -e ".[dev]"
 
 # Run full benchmark suite
@@ -130,7 +130,7 @@ The benchmark produces:
 1. **Raw JSON results** — per-request timings for full reproducibility
 2. **Summary CSV** — one row per scenario with aggregated metrics
 3. **Comparison report** (Markdown + HTML) — side-by-side analysis with charts
-4. **HuggingFace Dataset** — auto-push to `kshitijthakkar/smoltrace-gradio-benchmark`
+4. **HuggingFace Dataset** — auto-push to `kshitijthakkar/mcp-server-bench`
 
 ---
 
@@ -151,9 +151,10 @@ The benchmark produces:
 ## Contributing
 
 PRs welcome. Key areas:
-- Additional server implementations (e.g., FastAPI raw, LitServe)
+- Additional server implementations (e.g., raw FastAPI, LitServe, Go MCP SDK, Node.js MCP SDK)
 - Docker-based isolation for stricter resource control
 - CI/CD integration for regression tracking
+- HuggingFace Spaces hosted benchmark runner
 
 ---
 

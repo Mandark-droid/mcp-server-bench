@@ -3,16 +3,16 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
-name = "gradio-mcp-benchmark"
+name = "mcp-server-bench"
 version = "0.1.0"
-description = "Structured benchmark suite comparing Gradio and FastMCP as API/MCP servers"
+description = "Structured benchmark suite comparing MCP server implementations under identical workloads"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 authors = [
     { name = "Kshitij Thakkar", email = "kshitij@tracemind.dev" }
 ]
-keywords = ["gradio", "mcp", "benchmark", "fastmcp", "api", "performance"]
+keywords = ["mcp", "benchmark", "gradio", "fastmcp", "api", "performance", "mcp-server"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -46,7 +46,7 @@ dev = [
 ]
 
 [project.scripts]
-gradio-bench = "run_benchmark:main"
+mcp-bench = "run_benchmark:main"
 
 [tool.setuptools.packages.find]
 include = ["servers*", "loadtest*", "analysis*"]
