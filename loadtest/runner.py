@@ -39,9 +39,15 @@ console = Console()
 class ServerProcess:
     """Manages a server subprocess."""
 
-    def __init__(self, server_type: ServerType, concurrency_limit: int | None = None):
+    def __init__(
+        self,
+        server_type: ServerType,
+        concurrency_limit: int | None = None,
+        queue_enabled: bool = True,
+    ):
         self.server_type = server_type
         self.concurrency_limit = concurrency_limit
+        self.queue_enabled = queue_enabled
         self.process: subprocess.Popen | None = None
         self.pid: int | None = None
 
@@ -57,6 +63,8 @@ class ServerProcess:
                 "--concurrency-limit", cl_arg,
                 "--port", str(cfg.GRADIO_PORT),
             ]
+            if not self.queue_enabled:
+                cmd.append("--no-queue")
         else:
             cmd = [
                 sys.executable,
@@ -166,7 +174,7 @@ async def run_scenario(
     console.print(f"\n[bold cyan]> {scenario.display_name}[/]")
 
     # 1. Start server
-    server = ServerProcess(scenario.server, scenario.concurrency_limit)
+    server = ServerProcess(scenario.server, scenario.concurrency_limit, scenario.queue_enabled)
     server.start()
     console.print(f"  Server PID: {server.pid}")
 

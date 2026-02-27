@@ -55,6 +55,12 @@ console = Console()
     default=None,
     help="Comma-separated protocols: http_api,mcp_streamable",
 )
+@click.option(
+    "--queue-modes",
+    type=str,
+    default=None,
+    help="Comma-separated Gradio queue modes: true,false (default: both)",
+)
 # --- Load generation ---
 @click.option(
     "--duration",
@@ -125,7 +131,7 @@ console = Console()
     help="Push results to HuggingFace dataset after completion",
 )
 def main(
-    full, quick, servers, tools, vus, cls, protocols,
+    full, quick, servers, tools, vus, cls, protocols, queue_modes,
     duration, warmup, request_timeout, server_timeout,
     gradio_port, fastmcp_port,
     metrics_interval, results_dir, output,
@@ -191,6 +197,9 @@ def main(
         _cls = None
         if cls:
             _cls = [None if c.strip().lower() == "none" else int(c) for c in cls.split(",")]
+        _queue_modes = None
+        if queue_modes:
+            _queue_modes = [v.strip().lower() == "true" for v in queue_modes.split(",")]
 
         scenarios = build_scenario_matrix(
             servers=_servers,
@@ -200,6 +209,7 @@ def main(
             protocols=_protocols,
             duration=duration,
             warmup=warmup,
+            queue_modes=_queue_modes,
         )
 
     console.print(f"[bold]Scenarios to run: {len(scenarios)}[/]")

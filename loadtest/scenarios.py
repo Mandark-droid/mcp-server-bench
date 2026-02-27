@@ -40,21 +40,26 @@ class Scenario:
     warmup_seconds: int = 5
     concurrency_limit: int | None = 1  # Only relevant for Gradio
     tool_params: dict[str, Any] = field(default_factory=dict)
+    queue_enabled: bool = True  # Gradio queue mode; irrelevant for FastMCP
 
     @property
     def scenario_id(self) -> str:
         cl = "unlimited" if self.concurrency_limit is None else str(self.concurrency_limit)
-        return (
+        sid = (
             f"{self.server.value}__{self.protocol.value}__{self.tool.value}"
             f"__vu{self.virtual_users}__cl{cl}"
         )
+        if not self.queue_enabled:
+            sid += "__noq"
+        return sid
 
     @property
     def display_name(self) -> str:
         cl = "inf" if self.concurrency_limit is None else str(self.concurrency_limit)
+        q = " | Q=off" if not self.queue_enabled else ""
         return (
             f"{self.server.value.title()} | {self.protocol.value} | "
-            f"{self.tool.value} | VU={self.virtual_users} | CL={cl}"
+            f"{self.tool.value} | VU={self.virtual_users} | CL={cl}{q}"
         )
 
 
@@ -67,8 +72,14 @@ def build_scenario_matrix(
     duration: int = 60,
     warmup: int = 5,
     tool_params: dict[str, dict] | None = None,
+    queue_modes: list[bool] | None = None,
 ) -> list[Scenario]:
     """Build the full scenario matrix from parameter sweeps.
+
+    Args:
+        queue_modes: List of queue_enabled values for Gradio scenarios.
+            Default [True, False] benchmarks both modes.
+            FastMCP scenarios always use queue_enabled=True (irrelevant).
 
     Returns a list of Scenario objects to execute.
     """
@@ -83,6 +94,7 @@ def build_scenario_matrix(
     _vu_levels = vu_levels or DEFAULT_VU_LEVELS
     _concurrency_limits = concurrency_limits or DEFAULT_GRADIO_CONCURRENCY_LIMITS
     _tool_params = tool_params or TOOL_PARAMS
+    _queue_modes = queue_modes if queue_modes is not None else [True, False]
 
     # Determine protocols per server
     _protocol_map = {
@@ -100,22 +112,24 @@ def build_scenario_matrix(
                 params = _tool_params.get(tool.value, {})
                 for vu in _vu_levels:
                     if server == ServerType.GRADIO:
-                        # Sweep concurrency limits for Gradio
+                        # Sweep concurrency limits and queue modes for Gradio
                         for cl in _concurrency_limits:
-                            scenarios.append(
-                                Scenario(
-                                    server=server,
-                                    protocol=protocol,
-                                    tool=tool,
-                                    virtual_users=vu,
-                                    duration_seconds=duration,
-                                    warmup_seconds=warmup,
-                                    concurrency_limit=cl,
-                                    tool_params=params,
+                            for q in _queue_modes:
+                                scenarios.append(
+                                    Scenario(
+                                        server=server,
+                                        protocol=protocol,
+                                        tool=tool,
+                                        virtual_users=vu,
+                                        duration_seconds=duration,
+                                        warmup_seconds=warmup,
+                                        concurrency_limit=cl,
+                                        tool_params=params,
+                                        queue_enabled=q,
+                                    )
                                 )
-                            )
                     else:
-                        # FastMCP doesn't have a concurrency_limit knob
+                        # FastMCP doesn't have queue or concurrency_limit knobs
                         scenarios.append(
                             Scenario(
                                 server=server,
@@ -136,7 +150,11 @@ def build_quick_scenarios(
     duration: int = 15,
     warmup: int = 3,
 ) -> list[Scenario]:
-    """Build a minimal scenario set for smoke testing."""
+    """Build a minimal scenario set for smoke testing.
+
+    Includes one queue=False variant for Gradio echo at VU=1 to
+    spot-check the queue overhead difference.
+    """
     from servers.config import TOOL_PARAMS
 
     scenarios = []
@@ -157,4 +175,19 @@ def build_quick_scenarios(
                             tool_params=TOOL_PARAMS.get(tool.value, {}),
                         )
                     )
+
+    # Add one queue=False Gradio variant for quick comparison
+    scenarios.append(
+        Scenario(
+            server=ServerType.GRADIO,
+            protocol=Protocol.HTTP_API,
+            tool=ToolName.ECHO,
+            virtual_users=1,
+            duration_seconds=duration,
+            warmup_seconds=warmup,
+            concurrency_limit=1,
+            tool_params=TOOL_PARAMS.get(ToolName.ECHO.value, {}),
+            queue_enabled=False,
+        )
+    )
     return scenarios

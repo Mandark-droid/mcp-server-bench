@@ -27,8 +27,12 @@ from shared_tools import (
 from config import GRADIO_PORT
 
 
-def parse_concurrency_limit() -> int | None:
-    """Parse concurrency limit from CLI args or environment variable."""
+def parse_args() -> tuple[int | None, bool]:
+    """Parse CLI args for concurrency limit and queue mode.
+
+    Returns:
+        (concurrency_limit, no_queue) tuple.
+    """
     parser = argparse.ArgumentParser(description="Gradio Benchmark Server")
     parser.add_argument(
         "--concurrency-limit",
@@ -41,6 +45,12 @@ def parse_concurrency_limit() -> int | None:
         type=int,
         default=int(os.environ.get("GRADIO_PORT", str(GRADIO_PORT))),
     )
+    parser.add_argument(
+        "--no-queue",
+        action="store_true",
+        default=False,
+        help="Disable Gradio queue (skip progress notifications overhead)",
+    )
     args = parser.parse_args()
 
     if args.port:
@@ -48,9 +58,8 @@ def parse_concurrency_limit() -> int | None:
         _server_port = args.port
 
     val = args.concurrency_limit.strip().lower()
-    if val == "none":
-        return None
-    return int(val)
+    concurrency_limit = None if val == "none" else int(val)
+    return concurrency_limit, args.no_queue
 
 
 _server_port = GRADIO_PORT
@@ -122,13 +131,15 @@ def payload_echo(payload: str) -> dict:
     return payload_echo_sync(payload)
 
 
-def build_app(concurrency_limit: int | None) -> gr.Blocks:
+def build_app(concurrency_limit: int | None, no_queue: bool = False) -> gr.Blocks:
     """Build the Gradio app with all benchmark tools."""
 
+    queue_label = "off" if no_queue else "on"
     with gr.Blocks(title="Gradio Benchmark Server") as demo:
         gr.Markdown("# 🔬 Gradio Benchmark Server")
         gr.Markdown(
-            f"Concurrency limit: **{concurrency_limit if concurrency_limit is not None else 'unlimited'}**"
+            f"Concurrency limit: **{concurrency_limit if concurrency_limit is not None else 'unlimited'}** | "
+            f"Queue: **{queue_label}**"
         )
 
         # --- Echo ---
@@ -144,6 +155,7 @@ def build_app(concurrency_limit: int | None) -> gr.Blocks:
             outputs=[echo_output],
             api_name="echo",
             concurrency_limit=concurrency_limit,
+            **({} if not no_queue else {"queue": False}),
         )
 
         # --- Fibonacci ---
@@ -159,6 +171,7 @@ def build_app(concurrency_limit: int | None) -> gr.Blocks:
             outputs=[fib_output],
             api_name="fibonacci",
             concurrency_limit=concurrency_limit,
+            **({} if not no_queue else {"queue": False}),
         )
 
         # --- JSON Transform ---
@@ -178,6 +191,7 @@ def build_app(concurrency_limit: int | None) -> gr.Blocks:
             outputs=[json_output],
             api_name="json_transform",
             concurrency_limit=concurrency_limit,
+            **({} if not no_queue else {"queue": False}),
         )
 
         # --- Async Sleep ---
@@ -193,6 +207,7 @@ def build_app(concurrency_limit: int | None) -> gr.Blocks:
             outputs=[sleep_output],
             api_name="async_sleep",
             concurrency_limit=concurrency_limit,
+            **({} if not no_queue else {"queue": False}),
         )
 
         # --- Payload Echo ---
@@ -210,15 +225,17 @@ def build_app(concurrency_limit: int | None) -> gr.Blocks:
             outputs=[payload_output],
             api_name="payload_echo",
             concurrency_limit=concurrency_limit,
+            **({} if not no_queue else {"queue": False}),
         )
 
     return demo
 
 
 def main():
-    concurrency_limit = parse_concurrency_limit()
-    demo = build_app(concurrency_limit)
-    demo.queue(default_concurrency_limit=concurrency_limit or 40)
+    concurrency_limit, no_queue = parse_args()
+    demo = build_app(concurrency_limit, no_queue=no_queue)
+    if not no_queue:
+        demo.queue(default_concurrency_limit=concurrency_limit or 40)
     demo.launch(
         server_name="0.0.0.0",
         server_port=_server_port,
