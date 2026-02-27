@@ -201,12 +201,28 @@ async def run_scenario(
             f"{scenario.duration_seconds}s (+{scenario.warmup_seconds}s warmup)"
         )
 
-        if scenario.protocol == Protocol.HTTP_API:
-            await run_http_benchmark(
-                scenario, collector, request_timeout=request_timeout,
+        try:
+            if scenario.protocol == Protocol.HTTP_API:
+                await run_http_benchmark(
+                    scenario, collector, request_timeout=request_timeout,
+                )
+            else:
+                await run_mcp_benchmark(scenario, collector)
+        except Exception as e:
+            sys_stop.set()
+            await sys_task
+            console.print(f"  [red]X Benchmark error: {e}[/]")
+            return ScenarioResult(
+                scenario_id=scenario.scenario_id,
+                scenario_display=scenario.display_name,
+                server=scenario.server.value,
+                protocol=scenario.protocol.value,
+                tool=scenario.tool.value,
+                virtual_users=scenario.virtual_users,
+                concurrency_limit=scenario.concurrency_limit,
+                duration_seconds=0,
+                errors=[str(e)],
             )
-        else:
-            await run_mcp_benchmark(scenario, collector)
 
         # 5. Stop system metrics collection
         sys_stop.set()

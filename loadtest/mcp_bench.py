@@ -42,6 +42,12 @@ def _build_jsonrpc(method: str, params: dict | None = None, req_id: str | None =
     return msg
 
 
+_MCP_HEADERS = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
+}
+
+
 async def _mcp_initialize(
     client: httpx.AsyncClient,
     base_url: str,
@@ -57,7 +63,7 @@ async def _mcp_initialize(
         response = await client.post(
             base_url,
             json=init_msg,
-            headers={"Content-Type": "application/json"},
+            headers=_MCP_HEADERS,
             timeout=15.0,
         )
         session_id = response.headers.get("mcp-session-id")
@@ -67,7 +73,7 @@ async def _mcp_initialize(
             "jsonrpc": "2.0",
             "method": "notifications/initialized",
         }
-        headers = {"Content-Type": "application/json"}
+        headers = {**_MCP_HEADERS}
         if session_id:
             headers["mcp-session-id"] = session_id
         await client.post(base_url, json=initialized_msg, headers=headers, timeout=10.0)
@@ -90,7 +96,7 @@ async def _mcp_call_tool(
         "arguments": arguments,
     })
 
-    headers = {"Content-Type": "application/json"}
+    headers = {**_MCP_HEADERS}
     if session_id:
         headers["mcp-session-id"] = session_id
 
@@ -198,7 +204,7 @@ async def run_mcp_benchmark(
             resp = await client.post(
                 base_url,
                 json=test_msg,
-                headers={"Content-Type": "application/json"},
+                headers=_MCP_HEADERS,
                 timeout=15.0,
             )
             if resp.status_code >= 400:
