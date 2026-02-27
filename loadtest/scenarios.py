@@ -65,6 +65,7 @@ def build_scenario_matrix(
     vu_levels: list[int] | None = None,
     concurrency_limits: list[int | None] | None = None,
     duration: int = 60,
+    warmup: int = 5,
     tool_params: dict[str, dict] | None = None,
 ) -> list[Scenario]:
     """Build the full scenario matrix from parameter sweeps.
@@ -108,6 +109,7 @@ def build_scenario_matrix(
                                     tool=tool,
                                     virtual_users=vu,
                                     duration_seconds=duration,
+                                    warmup_seconds=warmup,
                                     concurrency_limit=cl,
                                     tool_params=params,
                                 )
@@ -121,6 +123,7 @@ def build_scenario_matrix(
                                 tool=tool,
                                 virtual_users=vu,
                                 duration_seconds=duration,
+                                warmup_seconds=warmup,
                                 concurrency_limit=None,
                                 tool_params=params,
                             )
@@ -129,7 +132,10 @@ def build_scenario_matrix(
     return scenarios
 
 
-def build_quick_scenarios() -> list[Scenario]:
+def build_quick_scenarios(
+    duration: int = 15,
+    warmup: int = 3,
+) -> list[Scenario]:
     """Build a minimal scenario set for smoke testing."""
     from servers.config import TOOL_PARAMS
 
@@ -145,8 +151,8 @@ def build_quick_scenarios() -> list[Scenario]:
                             protocol=protocol,
                             tool=tool,
                             virtual_users=vu,
-                            duration_seconds=15,
-                            warmup_seconds=3,
+                            duration_seconds=duration,
+                            warmup_seconds=warmup,
                             concurrency_limit=cl,
                             tool_params=TOOL_PARAMS.get(tool.value, {}),
                         )

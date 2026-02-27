@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-mcp-server-bench — CLI Entry Point
+mcp-server-bench -- CLI Entry Point
 
 Usage:
-    python run_benchmark.py --full                   # Full sweep (~200 scenarios)
-    python run_benchmark.py --quick                  # Quick smoke test (~8 scenarios)
+    python run_benchmark.py --full
+    python run_benchmark.py --quick
     python run_benchmark.py --servers gradio,fastmcp --tools echo,fibonacci --vus 10,50
     python run_benchmark.py --analyze results/2026-02-27_run_001/
 """
@@ -21,8 +21,10 @@ console = Console()
 
 
 @click.command()
+# --- Presets ---
 @click.option("--full", is_flag=True, help="Run full benchmark matrix (~200 scenarios)")
 @click.option("--quick", is_flag=True, help="Quick smoke test (~8 scenarios, 15s each)")
+# --- Scenario selection ---
 @click.option(
     "--servers",
     type=str,
@@ -53,23 +55,69 @@ console = Console()
     default=None,
     help="Comma-separated protocols: http_api,mcp_streamable",
 )
+# --- Load generation ---
 @click.option(
     "--duration",
     type=int,
-    default=60,
-    help="Test duration per scenario in seconds (default: 60)",
+    default=None,
+    help="Test duration per scenario in seconds (default: 60, quick: 15)",
 )
 @click.option(
-    "--analyze",
+    "--warmup",
+    type=int,
+    default=None,
+    help="Warmup period per scenario in seconds (default: 5, quick: 3)",
+)
+@click.option(
+    "--request-timeout",
+    type=float,
+    default=None,
+    help="Per-request HTTP timeout in seconds (default: 30)",
+)
+@click.option(
+    "--server-timeout",
+    type=float,
+    default=None,
+    help="Server startup readiness timeout in seconds (default: 30)",
+)
+# --- Server ports ---
+@click.option(
+    "--gradio-port",
+    type=int,
+    default=None,
+    help="Port for Gradio server (default: 7860)",
+)
+@click.option(
+    "--fastmcp-port",
+    type=int,
+    default=None,
+    help="Port for FastMCP server (default: 8100)",
+)
+# --- Metrics & output ---
+@click.option(
+    "--metrics-interval",
+    type=float,
+    default=None,
+    help="System metrics sampling interval in seconds (default: 1.0)",
+)
+@click.option(
+    "--results-dir",
     type=str,
     default=None,
-    help="Path to existing results directory to analyze (skip running benchmarks)",
+    help="Base directory for results (default: results/)",
 )
 @click.option(
     "--output",
     type=str,
     default=None,
-    help="Output directory name (default: auto-generated timestamp)",
+    help="Output subdirectory name (default: auto-generated timestamp)",
+)
+# --- Post-run ---
+@click.option(
+    "--analyze",
+    type=str,
+    default=None,
+    help="Path to existing results directory to analyze (skip running benchmarks)",
 )
 @click.option(
     "--push-hf",
@@ -78,27 +126,64 @@ console = Console()
 )
 def main(
     full, quick, servers, tools, vus, cls, protocols,
-    duration, analyze, output, push_hf,
+    duration, warmup, request_timeout, server_timeout,
+    gradio_port, fastmcp_port,
+    metrics_interval, results_dir, output,
+    analyze, push_hf,
 ):
     """mcp-server-bench -- MCP Server Benchmark Suite"""
 
     console.print("\n[bold magenta]mcp-server-bench[/]\n")
+
+    # --- Apply port overrides before anything imports config ---
+    import servers.config as cfg
+
+    if gradio_port is not None:
+        cfg.GRADIO_PORT = gradio_port
+        cfg.GRADIO_API_BASE = f"http://127.0.0.1:{gradio_port}"
+        cfg.GRADIO_MCP_SSE = f"{cfg.GRADIO_API_BASE}/gradio_api/mcp/sse"
+        cfg.GRADIO_MCP_STREAMABLE = f"{cfg.GRADIO_API_BASE}/gradio_api/mcp/"
+        cfg.GRADIO_API_PREDICT = f"{cfg.GRADIO_API_BASE}/api/{{api_name}}"
+    if fastmcp_port is not None:
+        cfg.FASTMCP_PORT = fastmcp_port
+        cfg.FASTMCP_BASE = f"http://127.0.0.1:{fastmcp_port}"
+        cfg.FASTMCP_MCP_SSE = f"{cfg.FASTMCP_BASE}/sse"
+        cfg.FASTMCP_MCP_STREAMABLE = f"{cfg.FASTMCP_BASE}/mcp/"
+    if metrics_interval is not None:
+        cfg.SYSTEM_METRICS_INTERVAL_SECONDS = metrics_interval
+    if results_dir is not None:
+        cfg.RESULTS_DIR = results_dir
 
     # --- Analyze existing results ---
     if analyze:
         _analyze_results(Path(analyze))
         return
 
+    # --- Resolve defaults based on preset ---
+    if quick:
+        duration = duration if duration is not None else 15
+        warmup = warmup if warmup is not None else 3
+    else:
+        duration = duration if duration is not None else 60
+        warmup = warmup if warmup is not None else 5
+
+    request_timeout = request_timeout if request_timeout is not None else 30.0
+    server_timeout = server_timeout if server_timeout is not None else 30.0
+
     # --- Build scenario matrix ---
     from loadtest.scenarios import build_scenario_matrix, build_quick_scenarios
 
     if quick:
-        scenarios = build_quick_scenarios()
-        duration = 15
+        scenarios = build_quick_scenarios(
+            duration=duration,
+            warmup=warmup,
+        )
     elif full:
-        scenarios = build_scenario_matrix(duration=duration)
+        scenarios = build_scenario_matrix(
+            duration=duration,
+            warmup=warmup,
+        )
     else:
-        # Custom configuration
         _servers = servers.split(",") if servers else None
         _tools = tools.split(",") if tools else ["echo", "fibonacci"]
         _vus = [int(v) for v in vus.split(",")] if vus else [1, 10, 50]
@@ -114,6 +199,7 @@ def main(
             concurrency_limits=_cls,
             protocols=_protocols,
             duration=duration,
+            warmup=warmup,
         )
 
     console.print(f"[bold]Scenarios to run: {len(scenarios)}[/]")
@@ -123,22 +209,29 @@ def main(
     console.print(
         f"[dim]Estimated time: {total_time_est // 60}m {total_time_est % 60}s[/]"
     )
+    console.print(
+        f"[dim]Duration: {duration}s | Warmup: {warmup}s | "
+        f"Request timeout: {request_timeout}s | Server timeout: {server_timeout}s[/]"
+    )
 
     # --- Prepare output directory ---
-    from servers.config import RESULTS_DIR
-
+    base_dir = cfg.RESULTS_DIR
     if output:
-        run_dir = Path(RESULTS_DIR) / output
+        run_dir = Path(base_dir) / output
     else:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        run_dir = Path(RESULTS_DIR) / f"run_{timestamp}"
+        run_dir = Path(base_dir) / f"run_{timestamp}"
 
     console.print(f"[dim]Results will be saved to: {run_dir}[/]\n")
 
     # --- Run benchmarks ---
     from loadtest.runner import run_all_scenarios, save_results
 
-    results = asyncio.run(run_all_scenarios(scenarios))
+    results = asyncio.run(run_all_scenarios(
+        scenarios,
+        request_timeout=request_timeout,
+        server_timeout=server_timeout,
+    ))
     save_results(results, run_dir)
 
     # --- Generate analysis ---

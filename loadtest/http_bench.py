@@ -13,20 +13,17 @@ import httpx
 
 from loadtest.metrics import MetricsCollector, RequestMetric
 from loadtest.scenarios import Protocol, Scenario, ServerType
-from servers.config import (
-    GRADIO_API_BASE,
-    FASTMCP_BASE,
-)
+import servers.config as cfg
 
 
 def _build_url(scenario: Scenario) -> str:
     """Build the request URL based on server type and tool."""
     if scenario.server == ServerType.GRADIO:
         # Gradio 6.x queue API: /gradio_api/call/{api_name}
-        return f"{GRADIO_API_BASE}/gradio_api/call/{scenario.tool.value}"
+        return f"{cfg.GRADIO_API_BASE}/gradio_api/call/{scenario.tool.value}"
     else:
         # FastMCP REST endpoint format: /api/{tool_name}
-        return f"{FASTMCP_BASE}/api/{scenario.tool.value}"
+        return f"{cfg.FASTMCP_BASE}/api/{scenario.tool.value}"
 
 
 def _build_payload(scenario: Scenario) -> dict:
@@ -57,6 +54,7 @@ async def _single_request(
     payload: dict,
     collector: MetricsCollector,
     is_gradio: bool = False,
+    request_timeout: float = 30.0,
 ) -> None:
     """Execute a single HTTP request and record metrics."""
     start = time.time()
@@ -65,7 +63,7 @@ async def _single_request(
         response = await client.post(
             url,
             json=payload,
-            timeout=30.0,
+            timeout=request_timeout,
         )
 
         if is_gradio and 200 <= response.status_code < 300:
@@ -74,7 +72,7 @@ async def _single_request(
             event_id = event_data.get("event_id")
             if event_id:
                 result_url = f"{url}/{event_id}"
-                result_resp = await client.get(result_url, timeout=30.0)
+                result_resp = await client.get(result_url, timeout=request_timeout)
                 latency_ms = (time.time() - start) * 1000
                 # Check if the SSE response contains a successful completion
                 body = result_resp.text
@@ -121,19 +119,21 @@ async def _worker(
     url: str,
     payload: dict,
     collector: MetricsCollector,
-    stop_event: asyncio.Event,
+    deadline: float,
     is_gradio: bool = False,
+    request_timeout: float = 30.0,
 ) -> None:
-    """A single virtual user -- sends requests in a loop until stopped."""
-    while not stop_event.is_set():
-        await _single_request(client, url, payload, collector, is_gradio)
-        # Tiny yield to prevent event loop starvation
-        await asyncio.sleep(0)
+    """A single virtual user -- sends requests in a loop until deadline."""
+    while time.time() < deadline:
+        await _single_request(client, url, payload, collector, is_gradio, request_timeout)
+        # Yield to allow other tasks (metrics collection, etc.) to run
+        await asyncio.sleep(0.001)
 
 
 async def run_http_benchmark(
     scenario: Scenario,
     collector: MetricsCollector,
+    request_timeout: float = 30.0,
 ) -> None:
     """Run an HTTP API benchmark for the given scenario.
 
@@ -155,9 +155,9 @@ async def run_http_benchmark(
         # Verify server is reachable
         try:
             health_url = (
-                f"{GRADIO_API_BASE}/"
+                f"{cfg.GRADIO_API_BASE}/"
                 if is_gradio
-                else f"{FASTMCP_BASE}/api/health"
+                else f"{cfg.FASTMCP_BASE}/api/health"
             )
             await client.get(health_url, timeout=10.0)
         except Exception as e:
@@ -165,26 +165,28 @@ async def run_http_benchmark(
                 f"Server not reachable at {health_url}: {e}"
             ) from e
 
-        stop_event = asyncio.Event()
         collector.start(warmup_seconds=scenario.warmup_seconds)
+        deadline = time.time() + total_duration
 
-        # Spawn virtual users
+        # Spawn virtual users — each worker checks the deadline itself
         workers = [
             asyncio.create_task(
-                _worker(client, url, payload, collector, stop_event, is_gradio)
+                _worker(client, url, payload, collector, deadline, is_gradio, request_timeout)
             )
             for _ in range(scenario.virtual_users)
         ]
 
-        # Wait for test duration then signal stop
-        await asyncio.sleep(total_duration)
-        stop_event.set()
+        # Wait for all workers to finish (they self-terminate at deadline)
+        # Add a safety timeout so we never hang forever
+        safety_timeout = total_duration + request_timeout + 10
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*workers, return_exceptions=True),
+                timeout=safety_timeout,
+            )
+        except asyncio.TimeoutError:
+            for w in workers:
+                w.cancel()
+            await asyncio.gather(*workers, return_exceptions=True)
 
-        # Give workers time to finish in-flight requests
-        await asyncio.sleep(1.0)
-        for w in workers:
-            w.cancel()
-
-        # Suppress cancellation errors
-        await asyncio.gather(*workers, return_exceptions=True)
         collector.stop()

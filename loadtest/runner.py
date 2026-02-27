@@ -31,14 +31,7 @@ from loadtest.http_bench import run_http_benchmark
 from loadtest.mcp_bench import run_mcp_benchmark
 from loadtest.metrics import MetricsCollector, ScenarioResult, SystemSample
 from loadtest.scenarios import Protocol, Scenario, ServerType
-from servers.config import (
-    GRADIO_PORT,
-    FASTMCP_PORT,
-    GRADIO_API_BASE,
-    FASTMCP_BASE,
-    RESULTS_DIR,
-    SYSTEM_METRICS_INTERVAL_SECONDS,
-)
+import servers.config as cfg
 
 console = Console()
 
@@ -62,13 +55,13 @@ class ServerProcess:
                 sys.executable,
                 str(servers_dir / "gradio_server.py"),
                 "--concurrency-limit", cl_arg,
-                "--port", str(GRADIO_PORT),
+                "--port", str(cfg.GRADIO_PORT),
             ]
         else:
             cmd = [
                 sys.executable,
                 str(servers_dir / "fastmcp_server.py"),
-                "--port", str(FASTMCP_PORT),
+                "--port", str(cfg.FASTMCP_PORT),
             ]
 
         env = os.environ.copy()
@@ -86,9 +79,9 @@ class ServerProcess:
     async def wait_ready(self, timeout: float = 30.0) -> bool:
         """Wait for the server to be ready to accept requests."""
         if self.server_type == ServerType.GRADIO:
-            url = f"{GRADIO_API_BASE}/"
+            url = f"{cfg.GRADIO_API_BASE}/"
         else:
-            url = f"{FASTMCP_BASE}/api/health"
+            url = f"{cfg.FASTMCP_BASE}/api/health"
 
         start = time.time()
         async with httpx.AsyncClient() as client:
@@ -161,10 +154,14 @@ async def _collect_system_metrics(
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             break
 
-        await asyncio.sleep(SYSTEM_METRICS_INTERVAL_SECONDS)
+        await asyncio.sleep(cfg.SYSTEM_METRICS_INTERVAL_SECONDS)
 
 
-async def run_scenario(scenario: Scenario) -> ScenarioResult:
+async def run_scenario(
+    scenario: Scenario,
+    request_timeout: float = 30.0,
+    server_timeout: float = 30.0,
+) -> ScenarioResult:
     """Execute a single benchmark scenario end-to-end."""
     console.print(f"\n[bold cyan]> {scenario.display_name}[/]")
 
@@ -175,7 +172,7 @@ async def run_scenario(scenario: Scenario) -> ScenarioResult:
 
     try:
         # 2. Wait for readiness
-        ready = await server.wait_ready()
+        ready = await server.wait_ready(timeout=server_timeout)
         if not ready:
             console.print("[red]  X Server failed to start[/]")
             return ScenarioResult(
@@ -199,14 +196,15 @@ async def run_scenario(scenario: Scenario) -> ScenarioResult:
         )
 
         # 4. Run the appropriate benchmark
-        total_time = scenario.warmup_seconds + scenario.duration_seconds
         console.print(
             f"  Running: {scenario.virtual_users} VUs x "
             f"{scenario.duration_seconds}s (+{scenario.warmup_seconds}s warmup)"
         )
 
         if scenario.protocol == Protocol.HTTP_API:
-            await run_http_benchmark(scenario, collector)
+            await run_http_benchmark(
+                scenario, collector, request_timeout=request_timeout,
+            )
         else:
             await run_mcp_benchmark(scenario, collector)
 
@@ -310,7 +308,11 @@ def print_summary_table(results: list[ScenarioResult]) -> None:
     console.print(table)
 
 
-async def run_all_scenarios(scenarios: list[Scenario]) -> list[ScenarioResult]:
+async def run_all_scenarios(
+    scenarios: list[Scenario],
+    request_timeout: float = 30.0,
+    server_timeout: float = 30.0,
+) -> list[ScenarioResult]:
     """Run all scenarios sequentially and collect results."""
     results = []
     total = len(scenarios)
@@ -318,21 +320,20 @@ async def run_all_scenarios(scenarios: list[Scenario]) -> list[ScenarioResult]:
     console.print(f"\n[bold]Running {total} benchmark scenarios[/]\n")
 
     # Group by server type to minimize server restarts
-    from itertools import groupby
-
     sorted_scenarios = sorted(
         scenarios,
         key=lambda s: (s.server.value, s.concurrency_limit or 999, s.protocol.value),
     )
 
-    current_server = None
-    current_cl = -1
-
     for i, scenario in enumerate(sorted_scenarios, 1):
         console.print(f"\n{'='*60}")
         console.print(f"[bold]Scenario {i}/{total}[/]")
 
-        result = await run_scenario(scenario)
+        result = await run_scenario(
+            scenario,
+            request_timeout=request_timeout,
+            server_timeout=server_timeout,
+        )
         results.append(result)
 
     return results
