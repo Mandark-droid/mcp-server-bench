@@ -124,7 +124,7 @@ class ServerProcess:
                         "clientInfo": {"name": "readiness-check", "version": "0.1.0"},
                     },
                 }
-                headers = {"Content-Type": "application/json", "Accept": "application/json"}
+                headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
 
                 while time.time() - start < timeout:
                     try:
