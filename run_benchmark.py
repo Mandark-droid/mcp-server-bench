@@ -229,9 +229,11 @@ def main(
 
     results = asyncio.run(run_all_scenarios(
         scenarios,
+        run_dir=run_dir,
         request_timeout=request_timeout,
         server_timeout=server_timeout,
     ))
+    # Final save with console output (incremental saves are quiet)
     save_results(results, run_dir)
 
     # --- Generate analysis ---

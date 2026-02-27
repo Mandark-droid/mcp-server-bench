@@ -216,10 +216,20 @@ async def run_mcp_benchmark(
             for _ in range(scenario.virtual_users)
         ]
 
+        # Wait for test duration then signal stop
         await asyncio.sleep(total_duration)
         stop_event.set()
-        await asyncio.sleep(1.0)
-        for w in workers:
-            w.cancel()
-        await asyncio.gather(*workers, return_exceptions=True)
+
+        # Give workers time to finish in-flight requests, with a safety timeout
+        safety_timeout = 30.0 + 5  # request_timeout + grace
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*workers, return_exceptions=True),
+                timeout=safety_timeout,
+            )
+        except asyncio.TimeoutError:
+            for w in workers:
+                w.cancel()
+            await asyncio.gather(*workers, return_exceptions=True)
+
         collector.stop()

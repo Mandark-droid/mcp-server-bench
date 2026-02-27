@@ -234,8 +234,13 @@ async def run_scenario(
 def save_results(
     results: list[ScenarioResult],
     run_dir: Path,
+    quiet: bool = False,
 ) -> None:
-    """Save results to JSON and CSV files."""
+    """Save results to JSON and CSV files.
+
+    Args:
+        quiet: If True, skip console output (used for incremental saves).
+    """
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # Summary CSV
@@ -244,7 +249,6 @@ def save_results(
     df = pd.DataFrame(rows)
     csv_path = run_dir / "summary.csv"
     df.to_csv(csv_path, index=False)
-    console.print(f"\n[green]Summary saved to {csv_path}[/]")
 
     # Detailed JSON (includes raw latencies)
     json_path = run_dir / "detailed_results.json"
@@ -266,10 +270,11 @@ def save_results(
             indent=2,
             default=str,
         )
-    console.print(f"[green]Detailed results saved to {json_path}[/]")
 
-    # Print summary table
-    print_summary_table(results)
+    if not quiet:
+        console.print(f"\n[green]Summary saved to {csv_path}[/]")
+        console.print(f"[green]Detailed results saved to {json_path}[/]")
+        print_summary_table(results)
 
 
 def print_summary_table(results: list[ScenarioResult]) -> None:
@@ -310,10 +315,15 @@ def print_summary_table(results: list[ScenarioResult]) -> None:
 
 async def run_all_scenarios(
     scenarios: list[Scenario],
+    run_dir: Path,
     request_timeout: float = 30.0,
     server_timeout: float = 30.0,
 ) -> list[ScenarioResult]:
-    """Run all scenarios sequentially and collect results."""
+    """Run all scenarios sequentially and collect results.
+
+    Results are saved to disk after each scenario so that completed
+    work is never lost if the run is interrupted.
+    """
     results = []
     total = len(scenarios)
 
@@ -335,5 +345,8 @@ async def run_all_scenarios(
             server_timeout=server_timeout,
         )
         results.append(result)
+
+        # Save after every scenario so results survive interruption
+        save_results(results, run_dir, quiet=True)
 
     return results
