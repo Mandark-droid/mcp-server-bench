@@ -69,8 +69,8 @@ class ServerProcess:
 
         self.process = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             cwd=str(servers_dir),
             env=env,
         )

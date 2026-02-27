@@ -119,15 +119,15 @@ async def _worker(
     url: str,
     payload: dict,
     collector: MetricsCollector,
-    deadline: float,
+    stop_event: asyncio.Event,
     is_gradio: bool = False,
     request_timeout: float = 30.0,
 ) -> None:
-    """A single virtual user -- sends requests in a loop until deadline."""
-    while time.time() < deadline:
+    """A single virtual user -- sends requests in a loop until stopped."""
+    while not stop_event.is_set():
         await _single_request(client, url, payload, collector, is_gradio, request_timeout)
-        # Yield to allow other tasks (metrics collection, etc.) to run
-        await asyncio.sleep(0.001)
+        # Tiny yield to prevent event loop starvation
+        await asyncio.sleep(0)
 
 
 async def run_http_benchmark(
@@ -165,20 +165,23 @@ async def run_http_benchmark(
                 f"Server not reachable at {health_url}: {e}"
             ) from e
 
+        stop_event = asyncio.Event()
         collector.start(warmup_seconds=scenario.warmup_seconds)
-        deadline = time.time() + total_duration
 
-        # Spawn virtual users — each worker checks the deadline itself
+        # Spawn virtual users
         workers = [
             asyncio.create_task(
-                _worker(client, url, payload, collector, deadline, is_gradio, request_timeout)
+                _worker(client, url, payload, collector, stop_event, is_gradio, request_timeout)
             )
             for _ in range(scenario.virtual_users)
         ]
 
-        # Wait for all workers to finish (they self-terminate at deadline)
-        # Add a safety timeout so we never hang forever
-        safety_timeout = total_duration + request_timeout + 10
+        # Wait for test duration then signal stop
+        await asyncio.sleep(total_duration)
+        stop_event.set()
+
+        # Give workers time to finish in-flight requests, with a safety timeout
+        safety_timeout = request_timeout + 5
         try:
             await asyncio.wait_for(
                 asyncio.gather(*workers, return_exceptions=True),
