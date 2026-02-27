@@ -71,11 +71,15 @@ class ServerProcess:
                 "--port", str(FASTMCP_PORT),
             ]
 
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+
         self.process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=str(servers_dir),
+            env=env,
         )
         self.pid = self.process.pid
 
@@ -162,7 +166,7 @@ async def _collect_system_metrics(
 
 async def run_scenario(scenario: Scenario) -> ScenarioResult:
     """Execute a single benchmark scenario end-to-end."""
-    console.print(f"\n[bold cyan]▶ {scenario.display_name}[/]")
+    console.print(f"\n[bold cyan]> {scenario.display_name}[/]")
 
     # 1. Start server
     server = ServerProcess(scenario.server, scenario.concurrency_limit)
@@ -173,7 +177,7 @@ async def run_scenario(scenario: Scenario) -> ScenarioResult:
         # 2. Wait for readiness
         ready = await server.wait_ready()
         if not ready:
-            console.print("[red]  ✗ Server failed to start[/]")
+            console.print("[red]  X Server failed to start[/]")
             return ScenarioResult(
                 scenario_id=scenario.scenario_id,
                 scenario_display=scenario.display_name,
@@ -185,7 +189,7 @@ async def run_scenario(scenario: Scenario) -> ScenarioResult:
                 duration_seconds=0,
                 errors=["Server failed to start within timeout"],
             )
-        console.print("  [green]✓ Server ready[/]")
+        console.print("  [green]OK Server ready[/]")
 
         # 3. Set up metrics collection
         collector = MetricsCollector()
@@ -197,7 +201,7 @@ async def run_scenario(scenario: Scenario) -> ScenarioResult:
         # 4. Run the appropriate benchmark
         total_time = scenario.warmup_seconds + scenario.duration_seconds
         console.print(
-            f"  Running: {scenario.virtual_users} VUs × "
+            f"  Running: {scenario.virtual_users} VUs x "
             f"{scenario.duration_seconds}s (+{scenario.warmup_seconds}s warmup)"
         )
 
@@ -213,7 +217,7 @@ async def run_scenario(scenario: Scenario) -> ScenarioResult:
         # 6. Aggregate results
         result = collector.aggregate(scenario)
         console.print(
-            f"  [green]✓[/] {result.total_requests} requests | "
+            f"  [green]OK[/] {result.total_requests} requests | "
             f"{result.throughput_rps:.1f} RPS | "
             f"p50={result.latency_p50:.1f}ms | "
             f"p99={result.latency_p99:.1f}ms | "
@@ -288,7 +292,7 @@ def print_summary_table(results: list[ScenarioResult]) -> None:
     table.add_column("Err%", justify="right")
 
     for r in results:
-        cl_str = "∞" if r.concurrency_limit is None else str(r.concurrency_limit)
+        cl_str = "inf" if r.concurrency_limit is None else str(r.concurrency_limit)
         err_style = "red" if r.error_rate > 0.01 else "green"
         table.add_row(
             r.server,

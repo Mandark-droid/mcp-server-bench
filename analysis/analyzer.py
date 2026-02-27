@@ -259,5 +259,5 @@ def generate_markdown_report(
     )
 
     report = "\n".join(lines)
-    output_path.write_text(report)
+    output_path.write_text(report, encoding="utf-8")
     return report

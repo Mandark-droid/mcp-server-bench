@@ -223,7 +223,6 @@ def main():
         server_name="0.0.0.0",
         server_port=_server_port,
         mcp_server=True,
-        show_api=True,
         quiet=True,
     )
 

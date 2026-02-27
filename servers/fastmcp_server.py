@@ -102,52 +102,45 @@ async def payload_echo(payload: str) -> dict:
 
 
 # --- Also expose a lightweight REST API for direct HTTP benchmarking ---
-# FastMCP's underlying ASGI app is a Starlette app, so we can add routes
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from starlette.routing import Route
 
 
+@mcp.custom_route("/api/echo", methods=["POST"])
 async def rest_echo(request: Request) -> JSONResponse:
     body = await request.json()
     return JSONResponse(echo_sync(body.get("message", "")))
 
 
+@mcp.custom_route("/api/fibonacci", methods=["POST"])
 async def rest_fibonacci(request: Request) -> JSONResponse:
     body = await request.json()
     return JSONResponse(fibonacci_sync(body.get("n", 10)))
 
 
+@mcp.custom_route("/api/json_transform", methods=["POST"])
 async def rest_json_transform(request: Request) -> JSONResponse:
     body = await request.json()
     return JSONResponse(json_transform_sync(body.get("data", {})))
 
 
+@mcp.custom_route("/api/async_sleep", methods=["POST"])
 async def rest_async_sleep(request: Request) -> JSONResponse:
     body = await request.json()
     result = await async_sleep_impl(body.get("duration_ms", 50))
     return JSONResponse(result)
 
 
+@mcp.custom_route("/api/payload_echo", methods=["POST"])
 async def rest_payload_echo(request: Request) -> JSONResponse:
     body = await request.json()
     return JSONResponse(payload_echo_sync(body.get("payload", "")))
 
 
+@mcp.custom_route("/api/health", methods=["GET"])
 async def rest_health(request: Request) -> JSONResponse:
     return JSONResponse({"status": "ok", "server": "fastmcp", "timestamp": time.time()})
-
-
-# These routes will be added to the ASGI app at startup
-REST_ROUTES = [
-    Route("/api/echo", rest_echo, methods=["POST"]),
-    Route("/api/fibonacci", rest_fibonacci, methods=["POST"]),
-    Route("/api/json_transform", rest_json_transform, methods=["POST"]),
-    Route("/api/async_sleep", rest_async_sleep, methods=["POST"]),
-    Route("/api/payload_echo", rest_payload_echo, methods=["POST"]),
-    Route("/api/health", rest_health, methods=["GET"]),
-]
 
 
 def main():

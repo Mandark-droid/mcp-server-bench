@@ -51,7 +51,7 @@ class Scenario:
 
     @property
     def display_name(self) -> str:
-        cl = "∞" if self.concurrency_limit is None else str(self.concurrency_limit)
+        cl = "inf" if self.concurrency_limit is None else str(self.concurrency_limit)
         return (
             f"{self.server.value.title()} | {self.protocol.value} | "
             f"{self.tool.value} | VU={self.virtual_users} | CL={cl}"

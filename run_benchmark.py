@@ -80,9 +80,9 @@ def main(
     full, quick, servers, tools, vus, cls, protocols,
     duration, analyze, output, push_hf,
 ):
-    """🔬 mcp-server-bench — MCP Server Benchmark Suite"""
+    """mcp-server-bench -- MCP Server Benchmark Suite"""
 
-    console.print("\n[bold magenta]🔬 mcp-server-bench[/]\n")
+    console.print("\n[bold magenta]mcp-server-bench[/]\n")
 
     # --- Analyze existing results ---
     if analyze:
@@ -148,7 +148,7 @@ def main(
     if push_hf:
         _push_to_hf(run_dir)
 
-    console.print("\n[bold green]✅ Benchmark complete![/]\n")
+    console.print("\n[bold green]Benchmark complete![/]\n")
 
 
 def _analyze_results(run_dir: Path) -> None:
@@ -156,7 +156,7 @@ def _analyze_results(run_dir: Path) -> None:
     from analysis.analyzer import load_results, compare_servers, generate_markdown_report
     from analysis.plots import generate_all_plots
 
-    console.print(f"\n[bold]📊 Analyzing results from {run_dir}[/]\n")
+    console.print(f"\n[bold]Analyzing results from {run_dir}[/]\n")
 
     try:
         df = load_results(run_dir)
@@ -180,12 +180,12 @@ def _analyze_results(run_dir: Path) -> None:
     # Print winners summary
     winners = comparisons.get("winners", {})
     if winners:
-        console.print("\n[bold]🏆 Winners by Tool:[/]")
+        console.print("\n[bold]Winners by Tool:[/]")
         for tool, w in winners.items():
             winner = w["throughput_winner"].title()
-            emoji = "🟠" if winner == "Gradio" else "🟢"
+            marker = "[yellow]*[/]" if winner == "Gradio" else "[green]*[/]"
             console.print(
-                f"  {emoji} {tool}: [bold]{winner}[/] "
+                f"  {marker} {tool}: [bold]{winner}[/] "
                 f"({w['speedup']}x faster, "
                 f"{w['gradio_best_rps']} vs {w['fastmcp_best_rps']} RPS)"
             )
