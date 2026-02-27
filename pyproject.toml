@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "gradio-mcp-benchmark"
+version = "0.1.0"
+description = "Structured benchmark suite comparing Gradio and FastMCP as API/MCP servers"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Kshitij Thakkar", email = "kshitij@tracemind.dev" }
+]
+keywords = ["gradio", "mcp", "benchmark", "fastmcp", "api", "performance"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Testing",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "gradio[mcp]>=5.38.0",
+    "fastmcp>=2.0.0",
+    "httpx>=0.27.0",
+    "psutil>=5.9.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "matplotlib>=3.7.0",
+    "rich>=13.0.0",
+    "click>=8.1.0",
+    "datasets>=2.14.0",
+    "huggingface-hub>=0.20.0",
+    "jinja2>=3.1.0",
+    "tabulate>=0.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.1.0",
+    "plotly>=5.18.0",
+]
+
+[project.scripts]
+gradio-bench = "run_benchmark:main"
+
+[tool.setuptools.packages.find]
+include = ["servers*", "loadtest*", "analysis*"]
